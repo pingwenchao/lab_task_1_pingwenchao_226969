@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.upm.pingwenchao.lab_task_1_pingwenchao_226969"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
