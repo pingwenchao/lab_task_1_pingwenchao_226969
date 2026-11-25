@@ -1,4 +1,4 @@
-name: Build and Deploy Android APK to Firebase
+name: Build and Deploy to Firebase App Distribution
 
 on:
   push:
@@ -6,18 +6,13 @@ on:
       - main
 
 jobs:
-  build_and_deploy:
+  code_analysis_and_tests:
+    name: Code Analysis & Tests
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout Code
         uses: actions/checkout@v4
-
-      - name: Set up Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -25,16 +20,47 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Install dependencies
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Analyze Code
+        run: flutter analyze
+
+      - name: Run Unit & Widget Tests
+        run: flutter test
+
+  build_and_deploy:
+    name: Build & Deploy to Firebase App Distribution
+    runs-on: ubuntu-latest
+    needs: code_analysis_and_tests
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21 LTS
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '21'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install Dependencies
         run: flutter pub get
 
       - name: Build Android Release APK
-        run: flutter build apk --release
+        run: flutter build apk --release --build-number=${{ github.run_number }}
 
-      - name: Upload APK to Firebase App Distribution
+      - name: Deploy to Firebase App Distribution
         uses: wzieba/Firebase-Distribution-Github-Action@v1
         with:
           appId: ${{ secrets.FIREBASE_APP_ID }}
           serviceCredentialsFileContent: ${{ secrets.CREDENTIAL_FILE_CONTENT }}
+          groups: testers
           file: build/app/outputs/flutter-apk/app-release.apk
-          releaseNotes: "Automated build from GitHub Actions (main branch)"
+          releaseNotes: "Commit: ${{ github.sha }}"

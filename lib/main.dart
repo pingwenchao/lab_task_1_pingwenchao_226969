@@ -32,7 +32,7 @@ class MyApp extends StatelessWidget {
   }
 }
 
-/// Main screen for capturing photos, tagging GPS coordinates, and caching data locally.
+/// Main screen for capturing photos, tagging GPS telemetry, and caching data locally.
 class GeoPhotoHomePage extends StatefulWidget {
   const GeoPhotoHomePage({super.key});
 
@@ -45,6 +45,8 @@ class _GeoPhotoHomePageState extends State<GeoPhotoHomePage> {
   static const String _keyImagePath = 'cached_image_path';
   static const String _keyLatitude = 'cached_latitude';
   static const String _keyLongitude = 'cached_longitude';
+  static const String _keyAltitude = 'cached_altitude';
+  static const String _keyAccuracy = 'cached_accuracy';
   static const String _keyLocationStatus = 'cached_location_status';
   static const String _keyTimestamp = 'cached_timestamp';
 
@@ -53,6 +55,8 @@ class _GeoPhotoHomePageState extends State<GeoPhotoHomePage> {
   String? _imagePath;
   double? _latitude;
   double? _longitude;
+  double? _altitude;
+  double? _accuracy;
   String _locationStatus = 'No GPS data captured yet';
   String? _timestamp;
 
@@ -67,12 +71,14 @@ class _GeoPhotoHomePageState extends State<GeoPhotoHomePage> {
     _loadCachedData();
   }
 
-  /// Loads previously saved image path and GPS metadata from SharedPreferences.
+  /// Loads previously saved image path and GPS telemetry from SharedPreferences.
   Future<void> _loadCachedData() async {
     final prefs = await SharedPreferences.getInstance();
     final savedPath = prefs.getString(_keyImagePath);
     final savedLat = prefs.getDouble(_keyLatitude);
     final savedLng = prefs.getDouble(_keyLongitude);
+    final savedAlt = prefs.getDouble(_keyAltitude);
+    final savedAcc = prefs.getDouble(_keyAccuracy);
     final savedLocStatus = prefs.getString(_keyLocationStatus);
     final savedTime = prefs.getString(_keyTimestamp);
 
@@ -87,6 +93,8 @@ class _GeoPhotoHomePageState extends State<GeoPhotoHomePage> {
       _imagePath = validPath;
       _latitude = savedLat;
       _longitude = savedLng;
+      _altitude = savedAlt;
+      _accuracy = savedAcc;
       _locationStatus = savedLocStatus ?? 'No GPS data captured yet';
       _timestamp = savedTime;
       _isLocationDenied = _locationStatus == 'Location Permission Denied';
@@ -165,6 +173,8 @@ class _GeoPhotoHomePageState extends State<GeoPhotoHomePage> {
       // Step 5: Retrieve GPS coordinates asynchronously with timeout and offline fallback
       double? lat;
       double? lng;
+      double? alt;
+      double? acc;
       String locText;
 
       if (hasLocationPermission) {
@@ -184,6 +194,8 @@ class _GeoPhotoHomePageState extends State<GeoPhotoHomePage> {
             );
             lat = position.latitude;
             lng = position.longitude;
+            alt = position.altitude;
+            acc = position.accuracy;
             locText = 'GPS Tagged Successfully';
           } catch (_) {
             // Fall back to last known device location when offline or indoors
@@ -191,6 +203,8 @@ class _GeoPhotoHomePageState extends State<GeoPhotoHomePage> {
             if (lastPos != null) {
               lat = lastPos.latitude;
               lng = lastPos.longitude;
+              alt = lastPos.altitude;
+              acc = lastPos.accuracy;
               locText = 'GPS Tagged (Last Known)';
             } else {
               locText = 'GPS Unavailable (Offline/Indoors)';
@@ -201,7 +215,7 @@ class _GeoPhotoHomePageState extends State<GeoPhotoHomePage> {
         locText = 'Location Permission Denied';
       }
 
-      // Step 6: Persist image path and GPS metadata to SharedPreferences
+      // Step 6: Persist image path and GPS telemetry to SharedPreferences
       final nowStr = DateTime.now().toLocal().toString().substring(0, 19);
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_keyImagePath, permanentPath);
@@ -211,9 +225,13 @@ class _GeoPhotoHomePageState extends State<GeoPhotoHomePage> {
       if (lat != null && lng != null) {
         await prefs.setDouble(_keyLatitude, lat);
         await prefs.setDouble(_keyLongitude, lng);
+        if (alt != null) await prefs.setDouble(_keyAltitude, alt);
+        if (acc != null) await prefs.setDouble(_keyAccuracy, acc);
       } else {
         await prefs.remove(_keyLatitude);
         await prefs.remove(_keyLongitude);
+        await prefs.remove(_keyAltitude);
+        await prefs.remove(_keyAccuracy);
       }
 
       if (!mounted) return;
@@ -221,6 +239,8 @@ class _GeoPhotoHomePageState extends State<GeoPhotoHomePage> {
         _imagePath = permanentPath;
         _latitude = lat;
         _longitude = lng;
+        _altitude = alt;
+        _accuracy = acc;
         _locationStatus = locText;
         _timestamp = nowStr;
         _statusMessage = hasLocationPermission
@@ -247,6 +267,8 @@ class _GeoPhotoHomePageState extends State<GeoPhotoHomePage> {
       _imagePath = null;
       _latitude = null;
       _longitude = null;
+      _altitude = null;
+      _accuracy = null;
       _locationStatus = 'No GPS data captured yet';
       _timestamp = null;
       _isLocationDenied = false;
@@ -381,7 +403,7 @@ class _GeoPhotoHomePageState extends State<GeoPhotoHomePage> {
 
               // Captured photo preview card with cache badge overlay
               Container(
-                height: 290,
+                height: 270,
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(18),
@@ -475,7 +497,7 @@ class _GeoPhotoHomePageState extends State<GeoPhotoHomePage> {
               ),
               const SizedBox(height: 16),
 
-              // GPS coordinates and metadata card
+              // GPS coordinates, telemetry, and metadata card
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -522,11 +544,11 @@ class _GeoPhotoHomePageState extends State<GeoPhotoHomePage> {
                     ),
                     const SizedBox(height: 14),
 
-                    // Two-column coordinate metric boxes
+                    // Row 1: Latitude and Longitude metric boxes
                     Row(
                       children: [
                         Expanded(
-                          child: _buildCoordinateBox(
+                          child: _buildMetricBox(
                             label: 'LATITUDE',
                             value: _latitude != null
                                 ? _latitude!.toStringAsFixed(6)
@@ -535,10 +557,34 @@ class _GeoPhotoHomePageState extends State<GeoPhotoHomePage> {
                         ),
                         const SizedBox(width: 10),
                         Expanded(
-                          child: _buildCoordinateBox(
+                          child: _buildMetricBox(
                             label: 'LONGITUDE',
                             value: _longitude != null
                                 ? _longitude!.toStringAsFixed(6)
+                                : '--',
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Row 2: Altitude and Accuracy metric boxes
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildMetricBox(
+                            label: 'ALTITUDE',
+                            value: _altitude != null
+                                ? '${_altitude!.toStringAsFixed(1)} m'
+                                : '--',
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _buildMetricBox(
+                            label: 'ACCURACY',
+                            value: _accuracy != null
+                                ? '±${_accuracy!.toStringAsFixed(1)} m'
                                 : '--',
                           ),
                         ),
@@ -624,8 +670,8 @@ class _GeoPhotoHomePageState extends State<GeoPhotoHomePage> {
     );
   }
 
-  /// Builds a styled metric container for displaying latitude or longitude.
-  Widget _buildCoordinateBox({required String label, required String value}) {
+  /// Builds a styled metric container for displaying GPS telemetry values.
+  Widget _buildMetricBox({required String label, required String value}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
